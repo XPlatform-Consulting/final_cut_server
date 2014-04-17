@@ -3,6 +3,7 @@
 # A utility script to output the metadata of either an asset or a production's assets to a csv file.
 #
 # NOTE: An "ADDRESS" field is added to the metadata with the address of the asset as the value
+require 'rubygems'
 require 'optparse'
 
 options = { }
