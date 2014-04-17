@@ -476,6 +476,7 @@ def asset_to_table(asset)
   metadata = { 'ADDRESS' => asset.address }
   metadata.merge!(asset.metadata)
   fields = metadata.keys
+  fields = fields.sort
   table = [ fields ]
   table << fields.map { |field_name| metadata[field_name] }
   table
@@ -489,6 +490,7 @@ def assets_to_table(assets)
     metadata['ADDRESS'] = asset['ADDRESS']
     metadata
   end
+  fields = fields.sort
   table = [ fields ]
   table = table + assets_metadata.map { |md| fields.map { |field_name| md[field_name] } }
   table
