@@ -8,6 +8,7 @@ require 'optparse'
 
 options = { }
 op = OptionParser.new
+op.on('--[no-]all-assets', 'Outputs metadta for all accets') { |v| options[:all_assets] = v }
 op.on('--production-id ID', 'A production id of a production to output the asset information for.') { |v| options[:production_id] = v }
 op.on('--asset-id ID', 'An asset id of an asset to output') { |v| options[:asset_id] = v }
 op.on('--csv-file-output FILEPATH', '')  { |v| options[:csv_file_output_path] = v }
@@ -17,14 +18,17 @@ op.parse!
 @production_id = options[:production_id]
 @asset_id = options[:asset_id]
 @csv_file_output_path = options[:csv_file_output_path]
+@all_assets = options[:all_assets]
 @log_level = options[:log_level] || 1
 
 def production_id; @production_id end
 def asset_id; @asset_id end
 def csv_file_output_path; @csv_file_output_path end
 def log_level; @log_level end
+def all_assets; @all_assets end
 
-abort("production id OR asset id argument is required.\n\n#{op}") unless production_id or asset_id or (production_id and asset_id)
+valid_option = ([ production_id, asset_id, all_assets ].delete_if { |v| !v }.length == 1)
+abort("production id OR asset id argument is required.\n\n#{op}") unless valid_option
 abort("csv file output argument is required.\n\n#{op}") unless csv_file_output_path
 ########################################################################################################################
 
@@ -32,6 +36,7 @@ abort("csv file output argument is required.\n\n#{op}") unless csv_file_output_p
 require 'cgi'
 require 'net/ssh'
 require 'shellwords'
+
 module FinalCutServer
 
   class Client
@@ -444,7 +449,6 @@ module FinalCutServer
       Asset.search(:linkparentaddr => "/project/#{production_id}")
     end
 
-
   end
 
 end
@@ -509,11 +513,13 @@ end
 if production_id
   assets_xml_doc = Project.get_assets_as_xml_document(production_id)
   assets_table = assets_xml_doc_to_table(assets_xml_doc)
-  output_to_csv(assets_table, csv_file_output_path)
-else
+elsif asset_id
   asset = Asset.get(asset_id, :with_attributes => false)
-  asset_table = asset_to_table(asset)
-  output_to_csv(asset_table, csv_file_output_path)
+  assets_tables = asset_to_table(asset)
+else
+  assets_xml_doc = Asset.search
+  assets_table = assets_xml_doc_to_table(assets_xml_doc)
 end
+output_to_csv(assets_table, csv_file_output_path)
 
 puts "Data output to file: '#{File.expand_path(csv_file_output_path)}'"
