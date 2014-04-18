@@ -27,8 +27,8 @@ def csv_file_output_path; @csv_file_output_path end
 def log_level; @log_level end
 def all_assets; @all_assets end
 
-valid_option = ([ production_id, asset_id, all_assets ].delete_if { |v| !v }.length == 1)
-abort("production id OR asset id argument is required.\n\n#{op}") unless valid_option
+asset_selection_option_valid = ([ production_id, asset_id, all_assets ].delete_if { |v| !v }.length == 1)
+abort("production id OR asset id OR the all-assets argument is required.\n\n#{op}") unless asset_selection_option_valid
 abort("csv file output argument is required.\n\n#{op}") unless csv_file_output_path
 ########################################################################################################################
 
@@ -163,23 +163,32 @@ module FinalCutServer
 
     # @param [String, Integer] id Either the numerical id or the address of the entity
     # @return [Object]
-    def self.get id, params = { }
-      self.new id, params
+    def self.get(id, params = { })
+      self.new(id, params)
     end # self.get
 
     # @param [String] address
     # @param [Hash] params
-    def self.delete address, params = { }
+    def self.delete(address, params = {})
       default_params = { :xml => true }
-      args = transform_options(default_params.merge(params)).join(' ')
-      command_line = "delete #{args} #{address}"
-      response = Client::fcsvr_client(command_line)
+      args           = transform_options(default_params.merge(params)).join(' ')
+      command_line   = "delete #{args} #{address}"
+      response       = Client.fcsvr_client(command_line)
     end # self.delete
 
-    def self.search_xml xml, params = { }
+    def self.document_from_xml(xml)
+      logger.debug { 'Processing XML' }
+      REXML::Document.new xml
+    end
+
+    def document_from_xml(xml)
+      self.class.document_from_xml(xml)
+    end
+
+    def self.search_xml(xml, params = { })
       container_address = params.delete(:container_address) { "/#{get_root_container_name}" }
       results = Client.fcsvr_client_search xml, container_address, params
-      REXML::Document.new results
+      document_from_xml(results)
     end # search
 
     def self.search params = { }
@@ -188,7 +197,7 @@ module FinalCutServer
       args = Client.transform_options(default_params.merge(params)).join(' ')
       command_line = "search #{args} #{container_address}"
       results = Client.fcsvr_client(command_line)
-      REXML::Document.new results
+      document_from_xml(results)
     end # search
 
     # Uses the current object's name to determine the root container name
@@ -208,12 +217,7 @@ module FinalCutServer
     end
 
     def parse_metadata_xml_values(values)
-      metadata_out = { }
-      values.each { |value|
-        next unless value and value.kind_of? REXML::Element
-        metadata_out[value.attributes['id']] = value.elements[1].text
-      }
-      metadata_out
+      self.class.parse_metadata_xml_values(values)
     end
 
     def self.parse_search_results_document(xml_document_in)
@@ -242,7 +246,7 @@ module FinalCutServer
       id = id.scan(/\d+/).first if id.is_a? String
       @id = id
       initialize_metadata if params.fetch(:with_metadata, true)
-      initialize_attributes if params.fetch(:with_attributes, true)
+      initialize_attributes if params.fetch(:initialize_attributes, true)
     end # initialize
 
     def address
@@ -260,16 +264,16 @@ module FinalCutServer
     # @param [Hash] metadata
     def set_metadata(metadata)
       command_line = "setmd #{address}"
-      metadata_string = metadata.each { |k,v| val = v.is_a?(String) ? "'#{v}'" : v; command_line.concat(" #{k.to_s.upcase}=#{val}")}
-      response = Client::fcsvr_client(command_line)
+      metadata.each { |k,v| val = v.is_a?(String) ? "'#{v}'" : v; command_line.concat(" #{k.to_s.upcase}=#{val}")}
+      Client.fcsvr_client(command_line)
     end # set_metadata
 
     def metadata_xml_document
-      @metadata_xml_document ||= REXML::Document.new(metadata_xml_raw)
+      @metadata_xml_document ||= document_from_xml(metadata_xml_raw)
     end # metadata_xml_document
 
     def initialize_metadata(metadata_in = metadata_xml_document)
-      @metadata = self.parse_metadata_xml_values(metadata_xml_document.root.elements['values'])
+      @metadata = self.parse_metadata_xml_values(metadata_in.root.elements['values'])
     end # initialize_metadata
 
     def initialize_attributes
@@ -456,6 +460,8 @@ end
 ########################################################################################################################
 
 FinalCutServer::Client.logger.level = log_level if log_level
+@logger = FinalCutServer::Client.logger
+def logger; @logger end
 
 require 'pp'
 require 'csv'
@@ -501,25 +507,41 @@ def assets_to_table(assets)
 end
 
 def assets_xml_doc_to_table(assets_xml_doc)
-  assets = assets_xml_doc.root.elements.map { |v| parse_xml_values(v)  }
+  logger.info { 'Parsing XML and Creating Table from Results.' }
+  asset_elements = assets_xml_doc.root.elements
+  total_elements = asset_elements.count
+  current_element = 0
+  assets = asset_elements.map do |v|
+    current_element += 1
+    logger.debug { "Processing XML Element #{current_element} of #{total_elements}" }
+    parse_xml_values(v)
+  end
   assets_table = assets_to_table(assets)
   assets_table
 end
 
 def output_to_csv(data, destination_file_path)
-  CSV.open(destination_file_path, 'w') { |writer| data.each { |row| writer << row } }
+  total_lines = data.length
+  CSV.open(destination_file_path, 'w') { |writer|
+    data.each_with_index do |row, idx|
+      logger.debug { "Writing Row #{idx+1} of #{total_lines}" }
+      writer << row
+    end
+  }
 end
 
+logger.info { 'Getting Asset(s) from Final Cut Server.' }
 if production_id
   assets_xml_doc = Project.get_assets_as_xml_document(production_id)
   assets_table = assets_xml_doc_to_table(assets_xml_doc)
 elsif asset_id
-  asset = Asset.get(asset_id, :with_attributes => false)
-  assets_tables = asset_to_table(asset)
+  asset = Asset.get(asset_id, :initialize_attributes => false)
+  assets_table = asset_to_table(asset)
 else
   assets_xml_doc = Asset.search
   assets_table = assets_xml_doc_to_table(assets_xml_doc)
 end
+logger.debug { 'Building CSV File.'}
 output_to_csv(assets_table, csv_file_output_path)
 
 puts "Data output to file: '#{File.expand_path(csv_file_output_path)}'"
