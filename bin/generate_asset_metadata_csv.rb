@@ -8,10 +8,10 @@ require 'optparse'
 
 options = { }
 op = OptionParser.new
-op.on('--[no-]all-assets', 'Outputs metadta for all accets') { |v| options[:all_assets] = v }
+op.on('--[no-]all-assets', 'Outputs metadata for all assets') { |v| options[:all_assets] = v }
 op.on('--production-id ID', 'A production id of a production to output the asset information for.') { |v| options[:production_id] = v }
 op.on('--asset-id ID', 'An asset id of an asset to output') { |v| options[:asset_id] = v }
-op.on('--csv-file-output FILEPATH', '')  { |v| options[:csv_file_output_path] = v }
+op.on('--csv-file-output FILEPATH', 'The csv file path. The file will be created if it doesn\'t exist or will overwrite an existing file')  { |v| options[:csv_file_output_path] = v }
 op.on('--log-level INTEGER', Integer, 'Logging Level. 0 = DEBUG. Default = 1') { |v| options[:log_level] = v }
 op.parse!
 
