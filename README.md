@@ -40,9 +40,14 @@ TODO: Write usage instructions here
 #### Usage
 
     Usage: generate_asset_metadata_csv [options]
-        --[no-]all-assets            Outputs metadata for all assets
-        --production-id ID           A production id of a production to output the asset information for.
-        --asset-id ID                An asset id of an asset to output
-        --csv-file-output FILEPATH   The csv file path.
-                                     The file will be created if it doesn't exist or will overwrite an existing file
-        --log-level INTEGER          Logging Level. 0 = DEBUG. Default = 1
+          --[no-]all-assets            Outputs metadata for all assets
+          --production-id ID           A production id of a production to output the asset information for.
+          --asset-id ID                An asset id of an asset to output
+          --csv-file-output FILEPATH   The csv file path. The file will be created if it doesn't exist or will overwrite an existing file
+          --log-level INTEGER          Logging Level. 0 = DEBUG. Default = 1
+          --[no-]log-to PATH           If specified this option will direct log output to the specified file instead of STDERR.
+                                       NOTE: This setting will be ignored if the run-log-path argument is set.
+          --[no-]run-log-path PATH     If specified a log file will be created in the form of {DateRun}_{production_assets|asset|all_assets}.log
+          --options-file-path PATH     The path to a file containing default arguments.
+                                        default: ~/.options/generate_asset_metadata_csv
+          -h, --help                   Display this message.

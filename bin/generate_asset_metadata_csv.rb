@@ -4,32 +4,65 @@
 #
 # NOTE: An "ADDRESS" field is added to the metadata with the address of the asset as the value
 require 'rubygems'
+require 'logger'
 require 'optparse'
 
 options = { }
+
+options_base_file_name = File.basename($0, '.*')
+options_file_path = "#{options_base_file_name}_options"
+options[:options_file_path] = File.exists?(options_file_path) ? options_file_path : "~/.options/#{options_base_file_name}"
+
 op = OptionParser.new
 op.on('--[no-]all-assets', 'Outputs metadata for all assets') { |v| options[:all_assets] = v }
 op.on('--production-id ID', 'A production id of a production to output the asset information for.') { |v| options[:production_id] = v }
 op.on('--asset-id ID', 'An asset id of an asset to output') { |v| options[:asset_id] = v }
 op.on('--csv-file-output FILEPATH', 'The csv file path. The file will be created if it doesn\'t exist or will overwrite an existing file')  { |v| options[:csv_file_output_path] = v }
 op.on('--log-level INTEGER', Integer, 'Logging Level. 0 = DEBUG. Default = 1') { |v| options[:log_level] = v }
+op.on('--[no-]log-to PATH', 'If specified this option will direct log output to the specified file instead of STDERR.', 'NOTE: This setting will be ignored if the run-log-path argument is set.') { |v| options[:log_to] = v }
+op.on('--[no-]run-log-path PATH', 'If specified a log file will be created in the form of {DateRun}_{production_assets|asset|all_assets}.log') { |v| options[:run_log_path] = v }
+op.on('--options-file-path PATH', 'The path to a file containing default arguments.', "\tdefault: #{options[:options_file_path]}") { |v| options[:options_file_path] = v }
+op.on('-h', '--help', 'Display this message.') { puts op; exit }
+
+original_arguments = ARGV.dup
 op.parse!
+op.parse!(original_arguments) if op.load(options[:options_file_path])
 
 @production_id = options[:production_id]
 @asset_id = options[:asset_id]
 @csv_file_output_path = options[:csv_file_output_path]
 @all_assets = options[:all_assets]
 @log_level = options[:log_level] || 1
+@log_to = options[:log_to] || STDERR
+@run_log_path = options[:run_log_path]
 
 def production_id; @production_id end
 def asset_id; @asset_id end
 def csv_file_output_path; @csv_file_output_path end
 def log_level; @log_level end
 def all_assets; @all_assets end
+def run_log_path; @run_log_path end
+def log_to; @log_to end
+def logger; @logger end
 
 asset_selection_option_valid = ([ production_id, asset_id, all_assets ].delete_if { |v| !v }.length == 1)
 abort("production id OR asset id OR the all-assets argument is required.\n\n#{op}") unless asset_selection_option_valid
 abort("csv file output argument is required.\n\n#{op}") unless csv_file_output_path
+
+if run_log_path
+  file_name = Time.now.strftime('%Y%m%d%H%M%S')
+  if production_id
+    file_name << '_production_assets.log'
+  elsif asset_id
+    file_name << '_asset.log'
+  else
+    file_name << '_all_assets.log'
+  end
+  @log_to = File.join(run_log_path, log_to)
+end
+
+@logger = Logger(log_to)
+@logger.level = log_level if log_level
 ########################################################################################################################
 
 
@@ -458,10 +491,7 @@ module FinalCutServer
 end
 
 ########################################################################################################################
-
-FinalCutServer::Client.logger.level = log_level if log_level
-@logger = FinalCutServer::Client.logger
-def logger; @logger end
+FinalCutServer::Client.logger = logger
 
 require 'pp'
 require 'csv'
