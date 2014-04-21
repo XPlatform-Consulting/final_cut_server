@@ -58,10 +58,10 @@ if run_log_path
   else
     file_name << '_all_assets.log'
   end
-  @log_to = File.join(run_log_path, log_to)
+  @log_to = File.join(run_log_path, file_name)
 end
 
-@logger = Logger(log_to)
+@logger = Logger.new(log_to)
 @logger.level = log_level if log_level
 ########################################################################################################################
 
@@ -551,6 +551,7 @@ def assets_xml_doc_to_table(assets_xml_doc)
 end
 
 def output_to_csv(data, destination_file_path)
+  logger.info { "Outputting to CSV File. '#{destination_file_path}'" }
   total_lines = data.length
   CSV.open(destination_file_path, 'w') { |writer|
     data.each_with_index do |row, idx|
